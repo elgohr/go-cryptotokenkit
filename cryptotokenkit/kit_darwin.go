@@ -25,9 +25,9 @@ type Identity interface {
 	// CertificateChain attempts to get the identity's full certificate chain.
 	CertificateChain() ([]*x509.Certificate, error)
 	// Signer gets a crypto.Signer that uses the identity's private key.
-	Signer() (crypto.Signer, error)
+	Signer() crypto.Signer
 	// Decrypter gets a crypto.Decrypter that uses the identity's private key.
-	Decrypter() (crypto.Decrypter, error)
+	Decrypter() crypto.Decrypter
 	// Delete deletes this identity from the system.
 	Delete() error
 	// Close any manually managed memory held by the Identity.
@@ -98,11 +98,7 @@ func Import(data []byte, password string) error {
 }
 
 type macIdentity struct {
-	ref   C.SecIdentityRef
-	kref  C.SecKeyRef
-	cref  C.SecCertificateRef
-	crt   *x509.Certificate
-	chain []*x509.Certificate
+	ref C.SecIdentityRef
 }
 
 func newMacIdentity(ref C.SecIdentityRef) *macIdentity {
@@ -115,15 +111,9 @@ func (i *macIdentity) Certificate() (*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer C.CFRelease(C.CFTypeRef(certRef))
 
-	crt, err := exportCertRef(certRef)
-	if err != nil {
-		return nil, err
-	}
-
-	i.crt = crt
-
-	return i.crt, nil
+	return exportCertRef(certRef)
 }
 
 func (i *macIdentity) CertificateChain() ([]*x509.Certificate, error) {
@@ -131,6 +121,7 @@ func (i *macIdentity) CertificateChain() ([]*x509.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer C.CFRelease(C.CFTypeRef(certRef))
 
 	policy := C.SecPolicyCreateSSL(0, nilCFStringRef)
 
@@ -154,23 +145,16 @@ func (i *macIdentity) CertificateChain() ([]*x509.Certificate, error) {
 		}
 		chain = append(chain, chainCert)
 	}
-	i.chain = chain
 
 	return chain, nil
 }
 
-func (i *macIdentity) Signer() (crypto.Signer, error) {
-	if _, err := i.Certificate(); err != nil {
-		return nil, err
-	}
-	return i, nil
+func (i *macIdentity) Signer() crypto.Signer {
+	return i
 }
 
-func (i *macIdentity) Decrypter() (crypto.Decrypter, error) {
-	if _, err := i.Certificate(); err != nil {
-		return nil, err
-	}
-	return i, nil
+func (i *macIdentity) Decrypter() crypto.Decrypter {
+	return i
 }
 
 func (i *macIdentity) Delete() error {
@@ -199,16 +183,6 @@ func (i *macIdentity) Close() {
 		C.CFRelease(C.CFTypeRef(i.ref))
 		i.ref = nilSecIdentityRef
 	}
-
-	if i.kref != nilSecKeyRef {
-		C.CFRelease(C.CFTypeRef(i.kref))
-		i.kref = nilSecKeyRef
-	}
-
-	if i.cref != nilSecCertificateRef {
-		C.CFRelease(C.CFTypeRef(i.cref))
-		i.cref = nilSecCertificateRef
-	}
 }
 
 func (i *macIdentity) Public() crypto.PublicKey {
@@ -230,6 +204,7 @@ func (i *macIdentity) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (
 	if err != nil {
 		return nil, err
 	}
+	defer C.CFRelease(C.CFTypeRef(kref))
 
 	cdigest, err := bytesToCFData(digest)
 	if err != nil {
@@ -264,6 +239,7 @@ func (i *macIdentity) Decrypt(_ io.Reader, msg []byte, opts crypto.DecrypterOpts
 	if err != nil {
 		return nil, err
 	}
+	defer C.CFRelease(C.CFTypeRef(kref))
 
 	cipherText, err := bytesToCFData(msg)
 	if err != nil {
@@ -348,33 +324,19 @@ func (i *macIdentity) signingAlgorithm(hash crypto.Hash) (C.SecKeyAlgorithm, err
 }
 
 func (i *macIdentity) getKeyRef() (C.SecKeyRef, error) {
-	if i.kref != nilSecKeyRef {
-		return i.kref, nil
-	}
-
 	var keyRef C.SecKeyRef
 	if err := osStatusError(C.SecIdentityCopyPrivateKey(i.ref, &keyRef)); err != nil {
 		return nilSecKeyRef, err
 	}
-
-	i.kref = keyRef
-
-	return i.kref, nil
+	return keyRef, nil
 }
 
 func (i *macIdentity) getCertRef() (C.SecCertificateRef, error) {
-	if i.cref != nilSecCertificateRef {
-		return i.cref, nil
-	}
-
 	var certRef C.SecCertificateRef
 	if err := osStatusError(C.SecIdentityCopyCertificate(i.ref, &certRef)); err != nil {
 		return nilSecCertificateRef, err
 	}
-
-	i.cref = certRef
-
-	return i.cref, nil
+	return certRef, nil
 }
 
 func exportCertRef(certRef C.SecCertificateRef) (*x509.Certificate, error) {
@@ -384,13 +346,7 @@ func exportCertRef(certRef C.SecCertificateRef) (*x509.Certificate, error) {
 	}
 	defer C.CFRelease(C.CFTypeRef(derRef))
 
-	der := cfDataToBytes(derRef)
-	crt, err := x509.ParseCertificate(der)
-	if err != nil {
-		return nil, err
-	}
-
-	return crt, nil
+	return x509.ParseCertificate(cfDataToBytes(derRef))
 }
 
 func stringToCFString(gostr string) C.CFStringRef {
