@@ -12,6 +12,12 @@ Golang-CryptoTokenKit is a [CryptoTokenKit](https://developer.apple.com/document
 go get github.com/elgohr/golang-cryptotokenkit
 ```
 
+# Help maintaining
+I'm happy to maintain this repository - nevertheless I need the hardware.  
+At the moment I'm maintaining this repository on an Intel Mac. For making this future proof, I would like to afford a M1.
+If you would help me on this, please check out: https://github.com/sponsors/elgohr/sponsorships?sponsor=elgohr&tier_id=231146  
+Current state: ![](https://geps.dev/progress/0)
+
 # Credits
 This repository is highly inspired by [smimesign](https://github.com/github/smimesign/blob/main/certstore/certstore_darwin.go).  
 Nevertheless it's updated to latest CoreFoundation calls and extended by additional methods, that are not needed for smimesign.
