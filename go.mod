@@ -1,4 +1,4 @@
-module github.com/elgohr/golang-cryptotokenkit
+module github.com/elgohr/go-cryptotokenkit
 
 go 1.18
 

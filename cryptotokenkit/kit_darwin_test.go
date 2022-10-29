@@ -7,10 +7,10 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"github.com/elgohr/golang-cryptotokenkit/cryptotokenkit"
+	"github.com/elgohr/go-cryptotokenkit/cryptotokenkit"
 	"github.com/stretchr/testify/require"
 	"math/big"
-	"software.sslmate.com/src/go-pkcs12"
+	pkcs12 "software.sslmate.com/src/go-pkcs12"
 	"testing"
 )
 
