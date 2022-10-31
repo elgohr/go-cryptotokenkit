@@ -43,7 +43,7 @@ func TestIdentities(t *testing.T) {
 	require.Greater(t, len(ids), 0)
 
 	testCertificate := getTestCertificate(t, ids)
-	require.NotNil(t, cert)
+	require.NotNil(t, testCertificate)
 	defer func() {
 		require.NoError(t, testCertificate.Delete())
 	}()
