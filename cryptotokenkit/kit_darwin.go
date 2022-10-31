@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"unsafe"
 )
 
@@ -251,10 +252,9 @@ func (i *macIdentity) Decrypt(_ io.Reader, msg []byte, opts crypto.DecrypterOpts
 
 	var cerr C.CFErrorRef
 	plainText := C.SecKeyCreateDecryptedData(kref, algo, cipherText, &cerr)
-
 	if err := cfErrorError(cerr); err != nil {
 		defer C.CFRelease(C.CFTypeRef(cerr))
-		return nil, err
+		return nil, fmt.Errorf("could not decrypt: %w", err)
 	}
 
 	if plainText == nilCFDataRef {
@@ -357,11 +357,9 @@ func stringToCFString(gostr string) C.CFStringRef {
 }
 
 func mapToCFDictionary(gomap map[C.CFTypeRef]C.CFTypeRef) C.CFDictionaryRef {
-	var (
-		n      = len(gomap)
-		keys   = make([]unsafe.Pointer, 0, n)
-		values = make([]unsafe.Pointer, 0, n)
-	)
+	n := len(gomap)
+	keys := make([]unsafe.Pointer, 0, n)
+	values := make([]unsafe.Pointer, 0, n)
 
 	for k, v := range gomap {
 		keys = append(keys, unsafe.Pointer(k))
@@ -378,10 +376,8 @@ func cfDataToBytes(cfdata C.CFDataRef) []byte {
 }
 
 func bytesToCFData(gobytes []byte) (C.CFDataRef, error) {
-	var (
-		cptr = (*C.UInt8)(nil)
-		clen = C.CFIndex(len(gobytes))
-	)
+	cptr := (*C.UInt8)(nil)
+	clen := C.CFIndex(len(gobytes))
 
 	if len(gobytes) > 0 {
 		cptr = (*C.UInt8)(&gobytes[0])
@@ -389,7 +385,7 @@ func bytesToCFData(gobytes []byte) (C.CFDataRef, error) {
 
 	cdata := C.CFDataCreate(nilCFAllocatorRef, cptr, clen)
 	if cdata == nilCFDataRef {
-		return nilCFDataRef, errors.New("error creatin cfdata")
+		return nilCFDataRef, errors.New("error creating cfdata")
 	}
 
 	return cdata, nil
@@ -417,10 +413,10 @@ func cfErrorError(cerr C.CFErrorRef) error {
 	code := int(C.CFErrorGetCode(cerr))
 	if cdescription := C.CFErrorCopyDescription(cerr); cdescription != nilCFStringRef {
 		defer C.CFRelease(C.CFTypeRef(cdescription))
-		if cstr := C.CFStringGetCStringPtr(cdescription, C.kCFStringEncodingUTF8); cstr != nil {
-			str := C.GoString(cstr)
-			return fmt.Errorf("CFError %d (%v)", code, str)
-		}
+		utf16Length := C.CFStringGetLength(cdescription)
+		buf := make([]byte, utf16Length*2)
+		C.CFStringGetCString(cdescription, (*C.char)(unsafe.Pointer(&buf[0])), utf16Length*2, C.kCFStringEncodingUTF8)
+		return fmt.Errorf("%s", strings.TrimRight(string(buf), "\x00"))
 	}
 	return fmt.Errorf("CFError %d", code)
 }

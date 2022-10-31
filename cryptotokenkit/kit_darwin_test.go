@@ -59,6 +59,18 @@ func TestIdentities(t *testing.T) {
 		require.Equal(t, original, string(plaintext))
 	})
 
+	t.Run("rsa encryption and failing decryption", func(t *testing.T) {
+		otherKey, err := rsa.GenerateKey(rand.Reader, 1024)
+		require.NoError(t, err)
+		original := "PLAINTEXT"
+		ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, &otherKey.PublicKey, []byte(original))
+		require.NoError(t, err)
+		require.NotEqual(t, original, ciphertext)
+		plaintext, err := testCertificate.Decrypter().Decrypt(rand.Reader, ciphertext, nil)
+		require.EqualError(t, err, "could not decrypt: The operation couldn’t be completed. (OSStatus error -67673 - CSSM Exception: -2147415994 CSSMERR_CSP_INVALID_DATA)")
+		require.Empty(t, string(plaintext))
+	})
+
 	t.Run("rsa signing", func(t *testing.T) {
 		content := []byte("PLAINTEXT")
 		hash := sha256.Sum256(content)
