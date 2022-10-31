@@ -25,7 +25,6 @@ func TestIdentities(t *testing.T) {
 		Subject: pkix.Name{
 			CommonName: TestCertificateName,
 		},
-		KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDataEncipherment,
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &keyBytes.PublicKey, keyBytes)
 	require.NoError(t, err)
