@@ -14,26 +14,13 @@ import (
 	"testing"
 )
 
-const TestCertificateName = "TEST_CERTIFICATE"
+const (
+	TestCertificateName1 = "TEST_CERTIFICATE_1"
+	TestCertificateName2 = "TEST_CERTIFICATE_2"
+)
 
 func TestIdentities(t *testing.T) {
-	keyBytes, err := rsa.GenerateKey(rand.Reader, 1024)
-	require.NoError(t, err)
-
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName: TestCertificateName,
-		},
-	}
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &keyBytes.PublicKey, keyBytes)
-	require.NoError(t, err)
-
-	cert, err := x509.ParseCertificate(derBytes)
-	require.NoError(t, err)
-
-	pfxBytes, err := pkcs12.Encode(rand.Reader, keyBytes, cert, []*x509.Certificate{}, pkcs12.DefaultPassword)
-	require.NoError(t, err)
+	pfxBytes := createCertificate(t, TestCertificateName1)
 
 	require.NoError(t, cryptotokenkit.Import(pfxBytes, pkcs12.DefaultPassword))
 
@@ -41,7 +28,7 @@ func TestIdentities(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(ids), 0)
 
-	testCertificate := getTestCertificate(t, ids)
+	testCertificate := getTestCertificate(t, ids, TestCertificateName1)
 	require.NotNil(t, testCertificate)
 	defer func() {
 		require.NoError(t, testCertificate.Delete())
@@ -82,13 +69,74 @@ func TestIdentities(t *testing.T) {
 	})
 }
 
-func getTestCertificate(t *testing.T, ids []cryptotokenkit.Identity) cryptotokenkit.Identity {
+func TestMacIdentity_Equal(t *testing.T) {
+	pfxBytes := createCertificate(t, TestCertificateName1)
+	require.NoError(t, cryptotokenkit.Import(pfxBytes, pkcs12.DefaultPassword))
+
+	pfxBytes = createCertificate(t, TestCertificateName2)
+	require.NoError(t, cryptotokenkit.Import(pfxBytes, pkcs12.DefaultPassword))
+
+	otherKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	require.NoError(t, err)
+
+	ids, err := cryptotokenkit.Identities()
+	require.NoError(t, err)
+
+	testCertificate1 := getTestCertificate(t, ids, TestCertificateName1)
+	require.NotNil(t, testCertificate1)
+	testCertificate2 := getTestCertificate(t, ids, TestCertificateName2)
+	require.NotNil(t, testCertificate2)
+	defer func() {
+		require.NoError(t, testCertificate1.Delete())
+		require.NoError(t, testCertificate2.Delete())
+	}()
+
+	cert1, hasEqual := testCertificate1.PrivateKey().(equalizer)
+	require.True(t, hasEqual)
+
+	cert2, hasEqual := testCertificate2.PrivateKey().(equalizer)
+	require.True(t, hasEqual)
+
+	require.False(t, cert1.Equal(cert2))
+	require.True(t, cert1.Equal(cert1))
+	require.True(t, cert2.Equal(cert2))
+	require.False(t, otherKey.Equal(cert2))
+	require.False(t, cert1.Equal(otherKey))
+}
+
+func createCertificate(t *testing.T, name string) []byte {
+	keyBytes, err := rsa.GenerateKey(rand.Reader, 1024)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: name,
+		},
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &keyBytes.PublicKey, keyBytes)
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(derBytes)
+	require.NoError(t, err)
+
+	pfxBytes, err := pkcs12.Encode(rand.Reader, keyBytes, cert, []*x509.Certificate{}, pkcs12.DefaultPassword)
+	require.NoError(t, err)
+
+	return pfxBytes
+}
+
+func getTestCertificate(t *testing.T, ids []cryptotokenkit.Identity, commonName string) cryptotokenkit.Identity {
 	for _, id := range ids {
 		cert, err := id.Certificate()
 		require.NoError(t, err)
-		if cert.Subject.CommonName == TestCertificateName {
+		if cert.Subject.CommonName == commonName {
 			return id
 		}
 	}
 	return nil
+}
+
+type equalizer interface {
+	Equal(x crypto.PrivateKey) bool
 }

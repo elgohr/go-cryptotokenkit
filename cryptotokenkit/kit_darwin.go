@@ -25,10 +25,12 @@ type Identity interface {
 	Certificate() (*x509.Certificate, error)
 	// CertificateChain attempts to get the identity's full certificate chain.
 	CertificateChain() ([]*x509.Certificate, error)
-	// Signer gets a crypto.Signer that uses the identity's private key.
+	// Signer returns a crypto.Signer that uses the identity's private key.
 	Signer() crypto.Signer
-	// Decrypter gets a crypto.Decrypter that uses the identity's private key.
+	// Decrypter returns a crypto.Decrypter that uses the identity's private key.
 	Decrypter() crypto.Decrypter
+	// PrivateKey returns a crypto.PrivateKey that uses the identity's private key.
+	PrivateKey() crypto.PrivateKey
 	// Delete deletes this identity from the system.
 	Delete() error
 	// Close any manually managed memory held by the Identity.
@@ -155,6 +157,18 @@ func (i *macIdentity) Signer() crypto.Signer {
 }
 
 func (i *macIdentity) Decrypter() crypto.Decrypter {
+	return i
+}
+
+func (i *macIdentity) Equal(x crypto.PrivateKey) bool {
+	id, isKitKey := x.(*macIdentity)
+	if !isKitKey {
+		return false
+	}
+	return i.ref == id.ref
+}
+
+func (i *macIdentity) PrivateKey() crypto.PrivateKey {
 	return i
 }
 
