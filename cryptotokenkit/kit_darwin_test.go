@@ -5,13 +5,18 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"github.com/elgohr/go-cryptotokenkit/cryptotokenkit"
 	"github.com/stretchr/testify/require"
 	"math/big"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
 	"testing"
+	"time"
 )
 
 const (
@@ -67,6 +72,37 @@ func TestIdentities(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, rsa.VerifyPKCS1v15(certificate.PublicKey.(*rsa.PublicKey), crypto.SHA256, hash[:], signature))
 	})
+
+	t.Run("tls connection", func(t *testing.T) {
+		tlsCert, err := testCertificate.Certificate()
+		require.NoError(t, err)
+		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+		}))
+		ts.TLS = &tls.Config{
+			Certificates: []tls.Certificate{{
+				Certificate:                  [][]byte{tlsCert.Raw},
+				PrivateKey:                   testCertificate.PrivateKey(),
+				SupportedSignatureAlgorithms: []tls.SignatureScheme{tls.PKCS1WithSHA1},
+			}},
+		}
+		ts.StartTLS()
+		defer ts.Close()
+
+		certPool := x509.NewCertPool()
+		certPool.AddCert(tlsCert)
+		client := http.Client{Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:    certPool,
+				MaxVersion: tls.VersionTLS12, // for using small key sizes in tests
+			},
+		}}
+
+		res, err := client.Get(ts.URL)
+		require.NoError(t, err)
+		require.NoError(t, res.Body.Close())
+		require.Equal(t, http.StatusAccepted, res.StatusCode)
+	})
 }
 
 func TestMacIdentity_Equal(t *testing.T) {
@@ -109,9 +145,15 @@ func createCertificate(t *testing.T, name string) []byte {
 	require.NoError(t, err)
 
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject: pkix.Name{
-			CommonName: name,
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: name},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		IPAddresses: []net.IP{
+			net.IPv4(127, 0, 0, 1),
+			net.IPv6loopback,
 		},
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &keyBytes.PublicKey, keyBytes)
