@@ -210,9 +210,9 @@ func (i *macIdentity) Public() crypto.PublicKey {
 }
 
 func (i *macIdentity) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-	hash := opts.HashFunc()
-	if len(digest) != hash.Size() {
-		return nil, errors.New("bad digest for hash")
+	algo, err := i.signingAlgorithm(opts, digest)
+	if err != nil {
+		return nil, err
 	}
 
 	kref, err := i.getKeyRef()
@@ -226,11 +226,6 @@ func (i *macIdentity) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (
 		return nil, err
 	}
 	defer C.CFRelease(C.CFTypeRef(cdigest))
-
-	algo, err := i.signingAlgorithm(hash)
-	if err != nil {
-		return nil, err
-	}
 
 	var cerr C.CFErrorRef
 	csig := C.SecKeyCreateSignature(kref, algo, cdigest, &cerr)
@@ -300,40 +295,68 @@ func decryptionAlgorithm(opts crypto.DecrypterOpts) C.SecKeyAlgorithm {
 	return C.kSecKeyAlgorithmRSAEncryptionPKCS1 // default
 }
 
-func (i *macIdentity) signingAlgorithm(hash crypto.Hash) (C.SecKeyAlgorithm, error) {
+func (i *macIdentity) signingAlgorithm(opts crypto.SignerOpts, digest []byte) (C.SecKeyAlgorithm, error) {
+	hash := opts.HashFunc()
+	if len(digest) != hash.Size() {
+		return nilCFStringRef, errors.New("bad digest for hash")
+	}
+
 	crt, err := i.Certificate()
 	if err != nil {
 		return nilCFStringRef, err
 	}
-	switch crt.PublicKey.(type) {
-	case *ecdsa.PublicKey:
-		switch hash {
-		case crypto.SHA1:
-			return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA1, nil
-		case crypto.SHA256:
-			return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA256, nil
-		case crypto.SHA384:
-			return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA384, nil
-		case crypto.SHA512:
-			return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA512, nil
+	switch opts.(type) {
+	case *rsa.PSSOptions:
+		switch crt.PublicKey.(type) {
+		case *rsa.PublicKey:
+			switch hash {
+			case crypto.SHA1:
+				return C.kSecKeyAlgorithmRSASignatureDigestPSSSHA1, nil
+			case crypto.SHA224:
+				return C.kSecKeyAlgorithmRSASignatureDigestPSSSHA224, nil
+			case crypto.SHA256:
+				return C.kSecKeyAlgorithmRSASignatureDigestPSSSHA256, nil
+			case crypto.SHA384:
+				return C.kSecKeyAlgorithmRSASignatureDigestPSSSHA384, nil
+			case crypto.SHA512:
+				return C.kSecKeyAlgorithmRSASignatureDigestPSSSHA512, nil
+			default:
+				return nilCFStringRef, errors.New("unsupported hash algorithm")
+			}
 		default:
-			return nilCFStringRef, errors.New("unsupported hash algorithm")
-		}
-	case *rsa.PublicKey:
-		switch hash {
-		case crypto.SHA1:
-			return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA1, nil
-		case crypto.SHA256:
-			return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256, nil
-		case crypto.SHA384:
-			return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA384, nil
-		case crypto.SHA512:
-			return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA512, nil
-		default:
-			return nilCFStringRef, errors.New("unsupported hash algorithm")
+			return nilCFStringRef, errors.New("unsupported key type")
 		}
 	default:
-		return nilCFStringRef, errors.New("unsupported key type")
+		switch crt.PublicKey.(type) {
+		case *ecdsa.PublicKey:
+			switch hash {
+			case crypto.SHA1:
+				return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA1, nil
+			case crypto.SHA256:
+				return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA256, nil
+			case crypto.SHA384:
+				return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA384, nil
+			case crypto.SHA512:
+				return C.kSecKeyAlgorithmECDSASignatureDigestX962SHA512, nil
+			default:
+				return nilCFStringRef, errors.New("unsupported hash algorithm")
+			}
+		case *rsa.PublicKey:
+			switch hash {
+			case crypto.SHA1:
+				return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA1, nil
+			case crypto.SHA256:
+				return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256, nil
+			case crypto.SHA384:
+				return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA384, nil
+			case crypto.SHA512:
+				return C.kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA512, nil
+			default:
+				return nilCFStringRef, errors.New("unsupported hash algorithm")
+			}
+		default:
+			return nilCFStringRef, errors.New("unsupported key type")
+		}
 	}
 }
 
