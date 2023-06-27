@@ -198,7 +198,7 @@ func createCertificate(t *testing.T, name string) []byte {
 	return pfxBytes
 }
 
-func getTestCertificate(t *testing.T, ids []cryptotokenkit.Identity, commonName string) cryptotokenkit.Identity {
+func getTestCertificate(t require.TestingT, ids []cryptotokenkit.Identity, commonName string) cryptotokenkit.Identity {
 	for _, id := range ids {
 		cert, err := id.Certificate()
 		require.NoError(t, err)
