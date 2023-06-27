@@ -170,7 +170,7 @@ func TestMacIdentity_Equal(t *testing.T) {
 	require.False(t, cert1.Equal(otherKey))
 }
 
-func createCertificate(t *testing.T, name string) []byte {
+func createCertificate(t require.TestingT, name string) []byte {
 	keyBytes, err := rsa.GenerateKey(rand.Reader, 1024)
 	require.NoError(t, err)
 
