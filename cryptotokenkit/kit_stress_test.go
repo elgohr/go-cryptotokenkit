@@ -14,7 +14,6 @@ import (
 )
 
 func FuzzSign(f *testing.F) {
-
 	commonName := "FUZZ_TEST_IDENTITY_" + uuid.New().String()
 	pfxBytes := createCertificate(f, commonName)
 
@@ -24,19 +23,19 @@ func FuzzSign(f *testing.F) {
 	require.NoError(f, err)
 	require.Greater(f, len(ids), 0)
 
-	testCertificate := getTestCertificate(f, ids, commonName)
+	identity := getIdentityByCommonName(f, ids, commonName)
 	defer func() {
-		require.NotNil(f, testCertificate)
-		require.NoError(f, testCertificate.Delete())
+		require.NotNil(f, identity)
+		require.NoError(f, identity.Delete())
 	}()
 
-	certificate, err := testCertificate.Certificate()
+	certificate, err := identity.Certificate()
 	require.NoError(f, err)
 
 	f.Add([]byte("input"))
 	f.Fuzz(func(t *testing.T, input []byte) {
 		hash := sha512.Sum512(input)
-		signature, err := testCertificate.Signer().Sign(rand.Reader, hash[:], crypto.SHA512)
+		signature, err := identity.Signer().Sign(rand.Reader, hash[:], crypto.SHA512)
 		require.NoError(t, err)
 		require.NoError(t, rsa.VerifyPKCS1v15(certificate.PublicKey.(*rsa.PublicKey), crypto.SHA512, hash[:], signature))
 	})
