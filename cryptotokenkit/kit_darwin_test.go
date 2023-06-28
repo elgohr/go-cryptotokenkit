@@ -33,20 +33,20 @@ func TestIdentities(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, len(ids), 0)
 
-	testCertificate := getTestCertificate(t, ids, TestCertificateName1)
-	require.NotNil(t, testCertificate)
+	identity := getIdentityByCommonName(t, ids, TestCertificateName1)
+	require.NotNil(t, identity)
 	defer func() {
-		require.NoError(t, testCertificate.Delete())
+		require.NoError(t, identity.Delete())
 	}()
 
 	t.Run("rsa encryption and decryption", func(t *testing.T) {
-		certificate, err := testCertificate.Certificate()
+		certificate, err := identity.Certificate()
 		require.NoError(t, err)
 		original := "PLAINTEXT"
 		ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, certificate.PublicKey.(*rsa.PublicKey), []byte(original))
 		require.NoError(t, err)
 		require.NotEqual(t, original, ciphertext)
-		plaintext, err := testCertificate.Decrypter().Decrypt(rand.Reader, ciphertext, nil)
+		plaintext, err := identity.Decrypter().Decrypt(rand.Reader, ciphertext, nil)
 		require.NoError(t, err)
 		require.Equal(t, original, string(plaintext))
 	})
@@ -58,7 +58,7 @@ func TestIdentities(t *testing.T) {
 		ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, &otherKey.PublicKey, []byte(original))
 		require.NoError(t, err)
 		require.NotEqual(t, original, ciphertext)
-		plaintext, err := testCertificate.Decrypter().Decrypt(rand.Reader, ciphertext, nil)
+		plaintext, err := identity.Decrypter().Decrypt(rand.Reader, ciphertext, nil)
 		require.EqualError(t, err, "could not decrypt: The operation couldn’t be completed. (OSStatus error -67673 - CSSM Exception: -2147415994 CSSMERR_CSP_INVALID_DATA)")
 		require.Empty(t, string(plaintext))
 	})
@@ -66,15 +66,15 @@ func TestIdentities(t *testing.T) {
 	t.Run("rsa signing", func(t *testing.T) {
 		content := []byte("PLAINTEXT")
 		hash := sha256.Sum256(content)
-		signature, err := testCertificate.Signer().Sign(rand.Reader, hash[:], crypto.SHA256)
+		signature, err := identity.Signer().Sign(rand.Reader, hash[:], crypto.SHA256)
 		require.NoError(t, err)
-		certificate, err := testCertificate.Certificate()
+		certificate, err := identity.Certificate()
 		require.NoError(t, err)
 		require.NoError(t, rsa.VerifyPKCS1v15(certificate.PublicKey.(*rsa.PublicKey), crypto.SHA256, hash[:], signature))
 	})
 
 	t.Run("tls connection pkcs15", func(t *testing.T) {
-		tlsCert, err := testCertificate.Certificate()
+		tlsCert, err := identity.Certificate()
 		require.NoError(t, err)
 		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
@@ -82,7 +82,7 @@ func TestIdentities(t *testing.T) {
 		ts.TLS = &tls.Config{
 			Certificates: []tls.Certificate{{
 				Certificate:                  [][]byte{tlsCert.Raw},
-				PrivateKey:                   testCertificate.PrivateKey(),
+				PrivateKey:                   identity.PrivateKey(),
 				SupportedSignatureAlgorithms: []tls.SignatureScheme{tls.PKCS1WithSHA1},
 			}},
 		}
@@ -105,7 +105,7 @@ func TestIdentities(t *testing.T) {
 	})
 
 	t.Run("tls connection pss", func(t *testing.T) {
-		tlsCert, err := testCertificate.Certificate()
+		tlsCert, err := identity.Certificate()
 		require.NoError(t, err)
 		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusAccepted)
@@ -113,7 +113,7 @@ func TestIdentities(t *testing.T) {
 		ts.TLS = &tls.Config{
 			Certificates: []tls.Certificate{{
 				Certificate: [][]byte{tlsCert.Raw},
-				PrivateKey:  testCertificate.PrivateKey(),
+				PrivateKey:  identity.PrivateKey(),
 			}},
 		}
 		ts.StartTLS()
@@ -148,19 +148,19 @@ func TestMacIdentity_Equal(t *testing.T) {
 	ids, err := cryptotokenkit.Identities()
 	require.NoError(t, err)
 
-	testCertificate1 := getTestCertificate(t, ids, TestCertificateName1)
-	require.NotNil(t, testCertificate1)
-	testCertificate2 := getTestCertificate(t, ids, TestCertificateName2)
-	require.NotNil(t, testCertificate2)
+	identity1 := getIdentityByCommonName(t, ids, TestCertificateName1)
+	require.NotNil(t, identity1)
+	identity2 := getIdentityByCommonName(t, ids, TestCertificateName2)
+	require.NotNil(t, identity2)
 	defer func() {
-		require.NoError(t, testCertificate1.Delete())
-		require.NoError(t, testCertificate2.Delete())
+		require.NoError(t, identity1.Delete())
+		require.NoError(t, identity2.Delete())
 	}()
 
-	cert1, hasEqual := testCertificate1.PrivateKey().(equalizer)
+	cert1, hasEqual := identity1.PrivateKey().(equalizer)
 	require.True(t, hasEqual)
 
-	cert2, hasEqual := testCertificate2.PrivateKey().(equalizer)
+	cert2, hasEqual := identity2.PrivateKey().(equalizer)
 	require.True(t, hasEqual)
 
 	require.False(t, cert1.Equal(cert2))
@@ -198,7 +198,7 @@ func createCertificate(t require.TestingT, name string) []byte {
 	return pfxBytes
 }
 
-func getTestCertificate(t require.TestingT, ids []cryptotokenkit.Identity, commonName string) cryptotokenkit.Identity {
+func getIdentityByCommonName(t require.TestingT, ids []cryptotokenkit.Identity, commonName string) cryptotokenkit.Identity {
 	for _, id := range ids {
 		cert, err := id.Certificate()
 		require.NoError(t, err)
