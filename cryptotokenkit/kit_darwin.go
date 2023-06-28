@@ -184,6 +184,7 @@ func (i *macIdentity) Delete() error {
 	query := mapToCFDictionary(map[C.CFTypeRef]C.CFTypeRef{
 		C.CFTypeRef(C.kSecClass):         C.CFTypeRef(C.kSecClassIdentity),
 		C.CFTypeRef(C.kSecMatchItemList): C.CFTypeRef(citemList),
+		C.CFTypeRef(C.kSecMatchLimit):    C.CFTypeRef(C.kSecMatchLimitAll),
 	})
 	if query == nilCFDictionaryRef {
 		return errors.New("error creating CFDictionary")
