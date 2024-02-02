@@ -2,7 +2,10 @@ name: Test
 on: [ push ]
 jobs:
   unit-tests:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [macos-13, macos-14]
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     timeout-minutes: 5
