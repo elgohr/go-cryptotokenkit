@@ -7,6 +7,11 @@
 
 Go-CryptoTokenKit is a [CryptoTokenKit](https://developer.apple.com/documentation/cryptotokenkit)-Wrapper for working with cryptographic assets on the Mac in Go.
 
+# Tested compatibility
+- macOS 13
+- macOS 14
+- macOS 15
+
 # Install
 ```
 go get github.com/elgohr/go-cryptotokenkit
